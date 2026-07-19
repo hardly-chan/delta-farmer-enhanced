@@ -221,6 +221,44 @@ Omni competition commands check the active tournament window, join status, eligi
 and leaderboard places. Hyena and Onyx migration commands switch HyperLiquid-backed accounts to
 Unified Account mode when the exchange reports a legacy account mode.
 
+### Cross-exchange spread tool
+
+The spread resizer monitors the price gap between any two supported venues and resizes your
+existing hedged BTC/ETH basket when the spread is tight enough. It reads live positions on each
+venue and adjusts them in place, preserving each leg's direction.
+
+**Setup:** add `passive_farm = true` to the account(s) in each venue's config that the spread tool
+should use. The tool picks the first enabled, passive-farm-flagged account per venue.
+
+```toml
+[[accounts]]
+name = "farm_omni"
+privkey = "enc:..."
+proxy = "http://..."
+passive_farm = true    # ← opts this account into the spread tool
+
+[[accounts]]
+name = "trade_omni"
+privkey = "enc:..."
+# no passive_farm — only used by `apps/omni.py trade`
+```
+
+**Usage:**
+
+```bash
+# Supported venues: ethereal, hyena, hyperliquid, nado, omni, onyx, pacifica, rise, zero1
+
+uv run apps/spread.py status omni pacifica          # spread + positions snapshot
+uv run apps/spread.py run    omni pacifica --action reduce --amount 500
+uv run apps/spread.py run    omni pacifica --action increase --amount 500 --threshold 0.1 --poll 5s
+uv run apps/spread.py plan   omni pacifica --action reduce --amount 500   # preview, no orders
+uv run apps/spread.py run    omni pacifica --action reduce --amount 500 --dry-run
+uv run apps/spread.py close  omni pacifica          # close all on both venues
+```
+
+The spread gate uses real executable BBO prices (ask for buys, bid for sells), so the threshold
+reflects the true cost of resizing. A negative spread (cross-exchange capture) always passes.
+
 ### Omni Cloudflare challenges
 
 Omni handles Cloudflare challenges automatically. By default it uses the shared solver gateway,

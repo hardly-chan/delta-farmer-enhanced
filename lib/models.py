@@ -100,6 +100,7 @@ class AccountConfig(BaseModel):
     privkey: SecretStr = Field(repr=False)
     proxy: str | None = None
     enabled: bool = True
+    passive_farm: bool = False  # opts this account into apps/spread.py (cross-exchange resizer)
 
     @field_validator("privkey", mode="before")
     @classmethod
