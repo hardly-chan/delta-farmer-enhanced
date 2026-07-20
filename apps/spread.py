@@ -27,6 +27,7 @@ from rich import print as rprint
 from rich.box import SIMPLE
 from rich.table import Table
 
+from apps.spread_registry import KNOWN_VENUES, VENUE_REGISTRY
 from lib.errors import AppError
 from lib.logger import logger
 from lib.models import AccountConfig
@@ -37,13 +38,12 @@ from strategy.spread import (
     SpreadState,
     Venue,
     actionable_legs,
+    effective_spread,
     fetch_state,
     gather_prices_and_lots,
     plan_resize,
     run_spread_gate,
 )
-
-from .spread_registry import KNOWN_VENUES, VENUE_REGISTRY
 
 DEFAULT_SYMBOLS = ["BTC", "ETH"]
 DEFAULT_THRESHOLD = Decimal("0.1")
@@ -112,22 +112,29 @@ def build_clients(venue_a: str, venue_b: str, configs_dir: str) -> dict[Venue, T
 # MARK: Display
 
 
-def _fmt_pct(x: Decimal | None) -> str:
-    return f"{x:+.4f}%" if x is not None else "n/a"
+def _fmt_spread(x: Decimal | None, active: bool) -> str:
+    """Render a spread value, bolding/coloring the active action's column."""
+    if x is None:
+        return "n/a"
+    val = f"{x:+.4f}%"
+    return f"[bold]{val}[/bold]" if active else val
 
 
-def render_spread_table(state: SpreadState, threshold: Decimal, symbols: list[str]) -> None:
+def render_spread_table(
+    state: SpreadState, threshold: Decimal, symbols: list[str], action: str
+) -> None:
     venues = list(state.bbos[symbols[0]].keys()) if symbols and state.bbos.get(symbols[0]) else []
     if not venues:
         venues = list(state.positions.keys()) or ["venue_a", "venue_b"]
 
-    tbl = Table(box=SIMPLE, title="Cross-exchange spread")
+    tbl = Table(box=SIMPLE, title=f"Cross-exchange spread (active action: {action})")
     tbl.add_column("Symbol")
     tbl.add_column("Long venue")
     tbl.add_column("Short venue")
     tbl.add_column("Long BBO", justify="right")
     tbl.add_column("Short BBO", justify="right")
-    tbl.add_column("Spread", justify="right")
+    tbl.add_column("Spread (reduce)", justify="right")
+    tbl.add_column("Spread (increase)", justify="right")
     tbl.add_column(f"Gate <{threshold:.3f}%", justify="right")
 
     for symbol in symbols:
@@ -145,12 +152,21 @@ def render_spread_table(state: SpreadState, threshold: Decimal, symbols: list[st
         def _bbo_str(b: tuple[Decimal, Decimal] | None) -> str:
             return f"{b[0]:.2f} / {b[1]:.2f}" if b else "-"
 
-        spread = state.spreads.get(symbol)
-        ok = spread is not None and spread < threshold
+        # Compute both action spreads from the same BBOs so the user can compare.
+        if long_bbo and short_bbo:
+            reduce_spread = effective_spread("reduce", long_bbo, short_bbo)
+            increase_spread = effective_spread("increase", long_bbo, short_bbo)
+        else:
+            reduce_spread = None
+            increase_spread = None
+
+        # Active spread drives the gate verdict.
+        active_spread = reduce_spread if action == "reduce" else increase_spread
+        ok = active_spread is not None and active_spread < threshold
         verdict = (
             "[green]pass[/green]"
             if ok
-            else ("[red]wait[/red]" if spread is not None else "[yellow]?[/yellow]")
+            else ("[red]wait[/red]" if active_spread is not None else "[yellow]?[/yellow]")
         )
 
         tbl.add_row(
@@ -159,7 +175,8 @@ def render_spread_table(state: SpreadState, threshold: Decimal, symbols: list[st
             short_v or "-",
             _bbo_str(long_bbo),
             _bbo_str(short_bbo),
-            _fmt_pct(spread),
+            _fmt_spread(reduce_spread, active=action == "reduce"),
+            _fmt_spread(increase_spread, active=action == "increase"),
             verdict,
         )
 
@@ -200,7 +217,7 @@ async def cmd_status(args: argparse.Namespace) -> None:
     clients = build_clients(args.venue_a, args.venue_b, args.configs_dir)
     symbols = args.symbols.split(",")
     state = await fetch_state(clients, symbols, args.action)
-    render_spread_table(state, args.threshold, symbols)
+    render_spread_table(state, args.threshold, symbols, args.action)
     render_positions(state, symbols)
 
 
@@ -209,7 +226,7 @@ async def cmd_run(args: argparse.Namespace) -> None:
     symbols = args.symbols.split(",")
 
     def on_state(state: SpreadState) -> None:
-        render_spread_table(state, args.threshold, symbols)
+        render_spread_table(state, args.threshold, symbols, args.action)
         render_positions(state, symbols)
 
     executed = await run_spread_gate(
@@ -243,7 +260,7 @@ async def cmd_plan(args: argparse.Namespace) -> None:
     symbols = args.symbols.split(",")
 
     state = await fetch_state(clients, symbols, args.action)
-    render_spread_table(state, args.threshold, symbols)
+    render_spread_table(state, args.threshold, symbols, args.action)
     render_positions(state, symbols)
 
     prices, lots = await gather_prices_and_lots(clients, symbols)
