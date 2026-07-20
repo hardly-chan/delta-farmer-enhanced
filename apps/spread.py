@@ -264,7 +264,9 @@ async def cmd_plan(args: argparse.Namespace) -> None:
     render_positions(state, symbols)
 
     prices, lots = await gather_prices_and_lots(clients, symbols)
-    plan = plan_resize({v: state.positions[v] for v in clients}, args.amount, args.action, prices, lots)
+    plan = plan_resize(
+        {v: state.positions[v] for v in clients}, args.amount, args.action, prices, lots
+    )
 
     tbl = Table(box=SIMPLE, title=f"Planned {args.action} (~${args.amount:.2f}/venue)")
     tbl.add_column("Venue")
