@@ -221,9 +221,9 @@ Omni competition commands check the active tournament window, join status, eligi
 and leaderboard places. Hyena and Onyx migration commands switch HyperLiquid-backed accounts to
 Unified Account mode when the exchange reports a legacy account mode.
 
-### Cross-exchange spread tool
+### Cross-exchange passive farm
 
-The spread resizer monitors the price gap between any two supported venues and resizes your
+The passive farm resizer monitors the price gap between any two supported venues and resizes your
 existing hedged BTC/ETH basket when the spread is tight enough. It reads live positions on each
 venue and adjusts them in place, preserving each leg's direction.
 
