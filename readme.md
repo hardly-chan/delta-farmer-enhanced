@@ -25,6 +25,8 @@ Automated delta-neutral trading for crypto points farming. Run classic two-sided
 - 📨 **Telegram notifications** — get alerts on trade start, stop, errors, and periodic reports
 - 🎲 **Configurable sizing and timing** — randomized sizes and durations to vary on-chain patterns
 
+## Acknowledgements
+Built upon the foundational architecture of [delta-farmer](https://github.com/vladkens/delta-farmer), extending it with multi-venue spread control, generalized exchange interfaces, and passive farm position management.
 ---
 
 ## What is delta-farmer?
